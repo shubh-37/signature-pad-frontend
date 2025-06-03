@@ -11,6 +11,7 @@ export default function SignatureCanvas({ readonly = false }) {
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [showFeedback, setShowFeedback] = useState(false);
   const [hasSignature, setHasSignature] = useState(false); // Track if signature exists
+  const [feedbackTimeout, setFeedbackTimeout] = useState(null);
   const [sessionId, setSessionId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('session') || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -90,6 +91,10 @@ export default function SignatureCanvas({ readonly = false }) {
       if (websocket) {
         websocket.close();
       }
+      // Clean up timeout on component unmount
+      if (feedbackTimeout) {
+        clearTimeout(feedbackTimeout);
+      }
     };
   }, [sessionId, readonly]);
 
@@ -146,6 +151,11 @@ export default function SignatureCanvas({ readonly = false }) {
         // Only show feedback on editable screen
         if (!isReadonly) {
           setShowFeedback(true);
+          // Set auto-close timeout for 30 seconds
+          const timeout = setTimeout(() => {
+            handleFeedback(0); // Auto-submit with rating 0
+          }, 30000);
+          setFeedbackTimeout(timeout);
         }
         break;
 
@@ -233,6 +243,11 @@ export default function SignatureCanvas({ readonly = false }) {
         toast.success('Signature Saved! ✅');
         setTimeout(() => {
           setShowFeedback(true);
+          // Set auto-close timeout for 30 seconds
+          const timeout = setTimeout(() => {
+            handleFeedback(0); // Auto-submit with rating 0
+          }, 30000);
+          setFeedbackTimeout(timeout);
         }, 1000);
       } catch (err) {
         console.error('Save error:', err);
@@ -250,16 +265,26 @@ export default function SignatureCanvas({ readonly = false }) {
   };
 
   const handleFeedback = (rating) => {
-    // Optional: Send feedback to backend
-    // fetch('http://localhost:5000/api/feedback', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     rating,
-    //     sessionId,
-    //     timestamp: new Date().toISOString()
-    //   }),
-    // });
+    // Clear the timeout if user provides feedback before auto-close
+    if (feedbackTimeout) {
+      clearTimeout(feedbackTimeout);
+      setFeedbackTimeout(null);
+    }
+
+    // Send feedback to backend
+    fetch('http://localhost:5000/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rating,
+        sessionId,
+        billNo: sessionId, // Using sessionId as billNo, adjust as needed
+        timestamp: new Date().toISOString(),
+        isAutoSubmit: rating === 0
+      })
+    }).catch((err) => {
+      console.error('Failed to submit feedback:', err);
+    });
 
     setShowFeedback(false);
 
@@ -376,10 +401,22 @@ export default function SignatureCanvas({ readonly = false }) {
       )}
 
       {/* Feedback Dialog - Only shown on editable screen */}
-      <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog
+        open={showFeedback}
+        onOpenChange={(open) => {
+          if (!open && feedbackTimeout) {
+            // If user tries to close without selecting, don't allow it
+            return;
+          }
+          setShowFeedback(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="text-center text-lg font-semibold">How was your experience?</DialogTitle>
+            <p className="text-center text-sm text-red-500 mt-2">
+              This form will auto-submit in 30 seconds if no selection is made
+            </p>
           </DialogHeader>
 
           <div className="flex justify-center space-x-6 py-6">
@@ -389,9 +426,10 @@ export default function SignatureCanvas({ readonly = false }) {
                 size="lg"
                 variant="outline"
                 onClick={() => handleFeedback(option.rating)}
-                className={`flex items-center justify-center h-16 w-16 p-2 transition-all duration-200 ${option.color}`}
+                className={`flex flex-col items-center space-y-2 h-20 w-20 bg-white p-2 transition-all duration-200 ${option.color}`}
               >
-                <span className="text-4xl">{option.emoji}</span>
+                <span className="text-2xl">{option.emoji}</span>
+                <span className="text-xs font-medium">{option.label}</span>
               </Button>
             ))}
           </div>
