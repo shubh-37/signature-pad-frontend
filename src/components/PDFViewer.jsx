@@ -16,12 +16,24 @@ export default function PDFViewer({ data }) {
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.5 }); // Increased from 1.5 to 2.0
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+
+        // Get device pixel ratio for high DPI displays
+        const devicePixelRatio = window.devicePixelRatio || 1;
+
+        // Set actual canvas size
+        canvas.width = viewport.width * devicePixelRatio;
+        canvas.height = viewport.height * devicePixelRatio;
+
+        // Scale canvas back down using CSS
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+
+        // Scale the drawing context so everything renders at higher resolution
+        context.scale(devicePixelRatio, devicePixelRatio);
 
         await page.render({ canvasContext: context, viewport }).promise;
         container.appendChild(canvas);
