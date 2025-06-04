@@ -24,9 +24,6 @@ export default function SignatureCanvas({ readonly = false }) {
   const originalFileName = urlParams.get('filename');
   const isReadonly = urlReadonly !== null ? urlReadonly : readonly;
 
-  const params = new URLSearchParams(window.location.search);
-  const pdfBase64 = params.get('pdf');
-
   useEffect(() => {
     // Initialize WebSocket connection
     const initWebSocket = () => {
@@ -234,7 +231,6 @@ export default function SignatureCanvas({ readonly = false }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pdfBase64,
             signatureBase64,
             sessionId,
             originalFileName: originalFileName

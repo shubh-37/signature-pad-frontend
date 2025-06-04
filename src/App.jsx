@@ -1,33 +1,56 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { FileText, Edit3, Eye } from "lucide-react"
-import PDFViewer from "./components/PDFViewer"
-import SignatureCanvas from "./components/SignatureCanvas"
+import { useEffect, useState } from 'react';
+import { FileText } from 'lucide-react';
+import PDFViewer from './components/PDFViewer';
+import SignatureCanvas from './components/SignatureCanvas';
+import { toast } from 'sonner';
 
 export default function App() {
-  const [pdfData, setPdfData] = useState(null)
-  const [mode, setMode] = useState("edit")
-  const [isLoading, setIsLoading] = useState(true)
+  const [mode, setMode] = useState('edit');
+  const [isLoading, setIsLoading] = useState(true);
+  const [pdfBase64, setPdfBase64] = useState(null);
+
+  const fetchPdfFile = async (filename) => {
+    const response = await fetch(`http://localhost:5000/api/pdf-file/${encodeURIComponent(filename)}`);
+    const blob = await response.blob();
+
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1]; // Only the base64 part
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const pdfBase64 = params.get("pdf")
-    const urlMode = params.get("mode") || "edit"
+    const params = new URLSearchParams(window.location.search);
+    const pdfFileName = params.get('pdfFile');
+    const urlMode = params.get('mode') || 'edit';
 
-    setMode(urlMode)
+    setMode(urlMode);
 
-    if (pdfBase64) {
-      try {
-        const byteArray = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0))
-        setPdfData(byteArray)
-      } catch (error) {
-        console.error("Error parsing PDF data:", error)
-      }
+    if (pdfFileName) {
+      const loadPdf = async () => {
+        const pdfFilename = params.get('pdfFile');
+        if (pdfFilename) {
+          try {
+            const base64Data = await fetchPdfFile(pdfFilename);
+            setPdfBase64(base64Data);
+          } catch (error) {
+            console.error('Failed to load PDF:', error);
+            toast.error('Failed to load PDF');
+          } finally {
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
+        }
+      };
+      loadPdf();
     }
-
-    setIsLoading(false)
-  }, [])
+  }, []);
 
   if (isLoading) {
     return (
@@ -37,10 +60,10 @@ export default function App() {
           <p className="text-gray-600 text-lg">Loading PDF...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  if (!pdfData) {
+  if (!pdfBase64) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
@@ -49,7 +72,7 @@ export default function App() {
           <p className="text-gray-500">Please provide a valid PDF document to continue.</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -89,7 +112,7 @@ export default function App() {
             <p className="text-sm text-gray-500 mt-1">Review the document before signing</p>
           </div>
           <div className="flex-1 overflow-auto">
-            <PDFViewer data={pdfData} />
+            <PDFViewer data={pdfBase64} />
           </div>
         </div>
 
@@ -97,19 +120,19 @@ export default function App() {
         <div className="w-1/2 bg-gray-50 flex flex-col">
           <div className="px-6 py-4 bg-white border-b border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">
-              {mode === "edit" ? "Digital Signature" : "Signature Preview"}
+              {mode === 'edit' ? 'Digital Signature' : 'Signature Preview'}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              {mode === "edit" ? "Draw your signature in the canvas below" : "View the applied signature"}
+              {mode === 'edit' ? 'Draw your signature in the canvas below' : 'View the applied signature'}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center p-6">
             <div className="w-full max-w-md">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <SignatureCanvas key={pdfData.length} pdfData={pdfData} readonly={mode === "readonly"} />
+                <SignatureCanvas key={pdfBase64.length} pdfData={pdfBase64} readonly={mode === 'readonly'} />
 
-                {mode === "edit" && (
+                {mode === 'edit' && (
                   <div className="mt-4 text-center">
                     <p className="text-xs text-gray-500">Sign above to complete the document</p>
                   </div>
@@ -120,5 +143,5 @@ export default function App() {
         </div>
       </div>
     </div>
-  )
+  );
 }
